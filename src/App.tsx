@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import * as faceapi from '@vladmandic/face-api';
 
 const distanceThreshold = 0.55;
-const modelPath = './models';
+const modelPath = import.meta.env.VITE_MODELS_IS_LOCAL
+    ? './models'
+    : 'https://cdn.jsdelivr.net/gh/vladmandic/face-api/model/';
 
 function App() {
     const videoRef = useRef<HTMLVideoElement | null>(null);

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:local": "set VITE_MODELS_IS_LOCAL=true&& vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview"
