@@ -1,32 +1,116 @@
-# React + TypeScript + Vite
+# «Смотрящий» (the-smotryaschiy)
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Веб-приложение для распознавания лица в реальном времени, работающее полностью в браузере. Приложение получает доступ к веб-камере, позволяет «запомнить» ваше лицо по снимку, а затем в непрерывном цикле сравнивает лицо в кадре с эталоном и сообщает, вы ли это.
 
-Currently, two official plugins are available:
+Все вычисления (детекция лиц, ключевые точки, дескрипторы) выполняются локально на клиенте с помощью нейросетевых моделей — никакие данные не отправляются на сервер.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Возможности
 
-## React Compiler
+- Доступ к веб-камере через `getUserMedia` (640×480).
+- Загрузка моделей face-api прямо из браузера (из каталога `public/models`).
+- Кнопка **«Запомнить меня»** — делает снимок, извлекает 128-мерный дескриптор лица и сохраняет его как эталон.
+- Непрерывная проверка в цикле `requestAnimationFrame`: текущее лицо сравнивается с эталоном по евклидову расстоянию.
+- Порог совпадения — `0.55` (константа `distanceThreshold` в `src/App.tsx`).
+- Вывод результата: «Это вы! ✅» с процентом уверенности или «Это НЕ вы! ❌».
+- Обработка ошибок: отказ в доступе к камере, сбой загрузки моделей, отсутствие лица в кадре.
+- Корректная очистка ресурсов при размонтировании: остановка медиопотока и отмена animation frame.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Технологический стек
 
-## Expanding the Oxlint configuration
+| Технология | Назначение |
+|---|---|
+| [React 19](https://react.dev) | UI-фреймворк |
+| [TypeScript](https://www.typescriptlang.org) | типизация |
+| [Vite 8](https://vite.dev) | сборщик и dev-сервер |
+| [@vladmandic/face-api](https://github.com/vladmandic/face-api) | детекция и распознавание лиц (форк face-api.js) |
+| [Oxlint](https://oxc.rs/docs/guide/usage/linter) | линтер |
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+### Используемые нейросетевые модели
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+Модели лежат в `public/models/` и загружаются через `loadFromUri('./models')`:
+
+1. **SSD MobileNet v1** — детекция лица на видео.
+2. **Face Landmark 68** — 68 ключевых точек лица.
+3. **Face Recognition** — вычисление 128-мерного дескриптора (эмбеддинга) лица.
+
+## Требования
+
+- Node.js 20+ (рекомендуется актуальная LTS).
+- Браузер с поддержкой `getUserMedia` (Chrome, Edge, Firefox, Safari).
+- **Важно:** доступ к камере разрешён только в защищённом контексте — `https://` или `http://localhost`.
+
+## Установка и запуск
+
+```bash
+# установка зависимостей
+npm install
+
+# запуск dev-сервера (порт 3000, браузер откроется автоматически)
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Откройте http://localhost:3000, разрешите доступ к камере и дождитесь загрузки моделей («Качаем модели...»).
+
+## Скрипты npm
+
+| Команда | Описание |
+|---|---|
+| `npm run dev` | запуск dev-сервера Vite с HMR на порту 3000 |
+| `npm run build` | проверка типов (`tsc -b`) и production-сборка в `dist/` |
+| `npm run lint` | проверка кода линтером Oxlint |
+| `npm run preview` | локальный предпросмотр production-сборки |
+
+## Как это работает
+
+1. При монтировании компонента `App` параллельно:
+   - запрашивается доступ к камере и видеопоток подключается к элементу `<video>`;
+   - загружаются три модели face-api.
+2. По нажатию **«Запомнить меня»** (`takeSnapshot`):
+   - текущий цикл проверки останавливается, предыдущий эталон сбрасывается;
+   - выполняется `detectSingleFace().withFaceLandmarks().withFaceDescriptor()`;
+   - дескриптор лица сохраняется в `referenceRef` и запускается новый цикл проверки.
+3. В цикле `checkMatches` (каждый animation frame):
+   - из текущего кадра извлекается дескриптор лица;
+   - вычисляется `faceapi.euclideanDistance` между ним и эталоном;
+   - если расстояние меньше `0.55` — «Это вы! ✅», иначе «Это НЕ вы! ❌».
+4. Счётчик `generationRef` гарантирует, что после повторного снимка старый цикл не перезапустится (защита от гонки асинхронных кадров).
+
+## Структура проекта
+
+```
+the_smotryaschiy/
+├── public/
+│   ├── favicon.svg
+│   ├── icons.svg
+│   └── models/                  # нейросетевые модели face-api (веса + манифесты)
+│       ├── ssd_mobilenetv1_model.*
+│       ├── face_landmark_68_model.*
+│       └── face_recognition_model.*
+├── src/
+│   ├── App.tsx                  # вся логика: камера, модели, распознавание, UI
+│   ├── main.tsx                 # точка входа React
+│   └── index.css                # глобальные стили
+├── index.html
+├── vite.config.ts               # порт 3000, автооткрытие браузера
+├── .oxlintrc.json               # конфигурация линтера
+└── tsconfig*.json               # конфигурация TypeScript
+```
+
+## Настройка
+
+- **Порог совпадения:** измените `distanceThreshold` в `src/App.tsx`. Меньше значение — строже сравнение (меньше ложных «Это вы!»), больше — мягче.
+- **Разрешение камеры:** параметр `getUserMedia({ video: { width, height } })` и атрибуты `<video>`.
+- **Порт dev-сервера:** `server.port` в `vite.config.ts`.
+
+## Возможные проблемы
+
+| Проблема | Решение |
+|---|---|
+| «Не удалось получить доступ к камере» | Разрешите доступ к камере для сайта; убедитесь, что используется `https://` или `localhost` |
+| «Ошибка загрузки модели» | Проверьте, что файлы из `public/models/` загружены полностью (в т.ч. `.bin`) |
+| «Лицо не найдено» при нажатии кнопки | Повернитесь лицом к камере, обеспечьте достаточное освещение |
+| Медленная работа | SSD MobileNet v1 — самая тяжёлая из моделей; на слабых устройствах распознавание может идти не в реальном времени |
+
+## Конфиденциальность
+
+Видео с камеры и дескрипторы лиц обрабатываются исключительно в браузере пользователя и никуда не передаются. Эталон лица хранится только в памяти страницы (`useRef`) и стирается при обновлении или закрытии вкладки.
