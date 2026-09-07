@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Локальные модели face-api (скачиваются вручную, см. README)
+public/models
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
